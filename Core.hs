@@ -1,0 +1,159 @@
+module CoreLanguage where
+
+import qualified Data.Text as T
+import Data.List as List
+
+
+data Expr e = EVar Name               -- Variables
+            | ENum Int                -- Numbers
+            | EConstr Int Int         -- Constructor tag arity
+            | EApp (Expr e) (Expr e)  -- Applications
+            | ELet                    -- Let(rec) expressions
+                IsRec                 --    True when recursive
+                [(e, Expr e)]         --    Defintions
+                (Expr e)              --    Body of the let(rec) expression
+            | ECase                   -- Case expressions
+                (Expr e)              --    Expression for case to compute
+                [Alter e]             --    Alternatives to match
+            | ELam [e] (Expr e)       -- Lambda abstractions
+             deriving (Show)
+
+
+type CoreExpr = Expr Name
+type Name     = String
+type IsRec    = Bool
+
+recursive :: IsRec
+recursive = True
+
+nonRecursive :: IsRec
+nonRecursive = False
+
+bindersOf :: [(a, b)] -> [a]
+bindersOf defns = [name | (name , rhs) <- defns]
+
+rhssOf :: [(a, b)] -> [b]
+rhssOf defns = [rhs | (name, rhs) <- defns]
+
+type Alter a = (Int, [a], Expr a)
+type CoreAlt = Alter Name
+
+-- Expressions with no internal structure are atomic --
+isAtomicExpr :: Expr a -> Bool
+isAtomicExpr (EVar v) = True
+isAtomicExpr (ENum n) = True
+isAtomicExpr e        = False
+
+-- a supercombinator defintion consists of a name, its arguments
+-- and the body of the definition
+type ScDefn a = (Name, [a], Expr a)
+type CoreScDefn = ScDefn Name
+
+-- a program is a list of supercombinator definitions
+type Program p = [ScDefn p]
+type CoreProgram = Program Name
+
+-- a minimal prelude for core language including the I, K , K1
+-- S combinators and functions for composition --
+preludeDefs :: CoreProgram
+preludeDefs = [("I", ["x"], EVar "x"),
+               ("K", ["x", "y"], EVar "x"),
+               ("K1", ["x", "y"], EVar "y"),
+               ("S", ["f", "g", "h"], EApp (EApp (EVar "f") (EVar "x"))
+                                           (EApp (EVar "g") (EVar "x"))),
+               ("compose", ["f", "g", "x"], EApp (EVar "f")
+                                                 (EApp (EVar "g") (EVar "x"))),
+               ("twice", ["f"], EApp (EApp (EVar "compose") (EVar "f")) (EVar "f"))]
+
+
+-- printing expressions --
+{-
+pprExpr :: CoreExpr -> String
+pprExpr (ENum n) = show n
+pprExpr (EVar v) = v
+pprExpr (EApp e1 e2) = pprExpr e1 ++ " " ++ pprExpr e2
+
+
+pprAExpr :: CoreExpr -> String
+pprAExpr e | isAtomicExpr e = pprExpr e
+pprAExpr e | otherwise  = "(" ++ pprExpr e ++ ")"
+
+mkMultiAp :: Int -> CoreExpr -> CoreExpr -> CoreExpr
+mkMultiAp n e1 e2 = List.foldl EApp e1 (List.take n e2s)
+                    where
+                      e2s = e2 : e2s
+-}
+
+-- printing with abstract type iseq --
+data Iseq = INil
+          | IStr String
+          | INum Int
+          | IAppend Iseq Iseq
+          | INewline
+          | IIndent Iseq
+          | IDisplay Iseq
+
+iNil                          = INil
+iAppend seq1 seq2             = IAppend seq1 seq2
+iStr str                      = IStr str
+iNum n                        = INum n
+iConcat [INil]                = INil
+iConcat (seq1 : seq2 : seqLs) = iAppend seq1 (iConcat (seq2 : seqLs))
+iInterleave sep (seq1 : seq2 : [INil])
+                              = iAppend seq1 (iAppend sep seq2)
+iInterleave sep (seq1 : seq2 : seqLs)
+                              = iAppend seq1 (iAppend sep (iInterleave sep seqLs))
+iNewline                      = IStr "\n"
+iIndent seq                   = seq
+iDisplay prog                 = prog
+
+pprExpr :: CoreExpr -> Iseq
+pprExpr (EVar v)                = iStr v
+pprExpr (EApp e1 e2)            = (pprExpr e1) `iAppend` (iStr " ") `iAppend` (pprExpr e2)
+pprExpr (ELet isrec defns expr) = iConcat [iStr keyword , iNewline,
+                                           iStr " ", iIndent (pprDefns defns), iNewline,
+                                           iStr "in ", pprExpr expr]
+                                    where
+                                      keyword | not isrec = "let"
+                                              | isrec = "letrec"
+pprExpr (ECase exp1 alterLs)  = iConcat [ iStr "case ", pprExpr exp1, iStr "of",
+                                          iNewline,
+                                          iIndent (iConcat (List.concatMap showAlters alterLs)) ]
+                                 where
+                                   showAlters (i, boundVars, expr) =
+                                       [iStr "<" , iNum i, iStr ">",
+                                                iInterleave (IStr ", ") (map iStr boundVars),
+                                                iStr "=>", pprExpr expr, iNewline]
+
+pprExpr (ELam varLs expr) = iConcat [ iStr "\\", iInterleave (IStr ", ") (map iStr varLs),
+                                      iNewline, iIndent (pprExpr expr)]
+
+
+
+pprDefns :: [(Name, CoreExpr)] -> Iseq
+pprDefns defns = iInterleave sep (map pprDefn defns)
+                    where
+                     sep = iConcat [ iStr ";" , iNewline ]
+
+pprDefn :: (Name, CoreExpr) -> Iseq
+pprDefn (name, expr) = iConcat [iStr name, iStr " = ", iIndent (pprExpr expr)]
+
+
+pprAExpr :: CoreExpr -> Iseq
+pprAExpr e | isAtomicExpr e = pprExpr e
+pprAExpr e | otherwise  = iConcat [IStr "(", pprExpr e, IStr ")"]
+
+mkMultiAp :: Int -> CoreExpr -> CoreExpr -> CoreExpr
+mkMultiAp n e1 e2 = List.foldl EApp e1 (List.take n e2s)
+                    where
+                      e2s = e2 : e2s
+
+pprProgram :: CoreProgram -> Iseq
+pprProgram scDefLs = iConcat (List.concatMap showScDef scDefLs)
+                        where
+                          showScDef (name, nameLs, nameExpr) =
+                             [iStr name, iInterleave (IStr ", ") (map iStr nameLs),
+                                        pprExpr nameExpr, iNewline]
+
+pprint :: CoreProgram -> Iseq
+pprint prog = iDisplay (pprProgram prog)
