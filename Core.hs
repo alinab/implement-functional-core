@@ -157,3 +157,48 @@ pprProgram scDefLs = iConcat (List.concatMap showScDef scDefLs)
 
 pprint :: CoreProgram -> Iseq
 pprint prog = iDisplay (pprProgram prog)
+
+-------------------------------------------------------------------------------
+{- Flattening Iseqs into displayable strings while ensuring that the time taken
+    for it is linear to the input iseq -}
+
+flatten :: Int -> [(Iseq, Int)] -> String
+flatten col [] = ""
+flatten col ((INil, indent) : seqs) = flatten col seqs
+flatten col ((IStr s, indent) : seqs)  = s ++ flatten col seqs
+flatten col ((INum i, indent) : seqs)  = show i ++ flatten col seqs
+flatten col ((IAppend seq1 seq2, indent) : seqs) = flatten col ((seq1, indent) :
+                                                                (seq2, indent) :
+                                                                seqs)
+flatten col ((INewline, indent) : seqs) = '\n' : (space indent) ++ flatten indent seqs
+flatten col ((IIndent seq, indent) : seqs) = flatten col ((seq, col) : seqs)
+
+space :: Int -> String
+space i = List.replicate i ' '
+
+iDisplay seq = flatten 0 [(seq, 0)]
+
+pprExprWithDisplay :: CoreExpr -> String
+pprExprWithDisplay (EVar v)       = iDisplay (iStr v)
+pprExprWithDisplay (EApp e1 e2)   = iDisplay $ (pprExpr e1) `iAppend` (iStr " ")
+                                                                `iAppend` (pprExpr e2)
+pprExprWithDisplay (ELet isrec defns expr) = iDisplay $ iConcat [iStr keyword,
+                                                            iNewline, iStr " ",
+                                                            iIndent (pprDefns defns),
+                                                            iNewline, iStr "in ", pprExpr expr]
+                                                 where
+                                                   keyword | not isrec = "let"
+                                                           | isrec = "letrec"
+pprExprWithDisplay (ECase exp1 alterLs)  = iDisplay $ iConcat [ iStr "case ",
+                                                pprExpr exp1, iStr "of", iNewline,
+                                                iIndent (iConcat (List.concatMap showAlters alterLs)) ]
+                                              where
+                                                showAlters (i, boundVars, expr) =
+                                                   [iStr "<" , iNum i, iStr ">",
+                                                    iInterleave (IStr ", ") (map iStr boundVars),
+                                                    iStr "=>", pprExpr expr, iNewline]
+
+pprExprWithDisplay (ELam varLs expr) = iDisplay $
+                                        iConcat [ iStr "\\",
+                                        iInterleave (IStr ", ") (map iStr varLs),
+                                                iNewline, iIndent (pprExpr expr)]
