@@ -98,14 +98,14 @@ iAppend seq1 seq2             = IAppend seq1 seq2
 iStr str                      = IStr str
 iNum n                        = INum n
 iConcat [INil]                = INil
+iConcat [seq1]                = iAppend seq1 INil
 iConcat (seq1 : seq2 : seqLs) = iAppend seq1 (iConcat (seq2 : seqLs))
-iInterleave sep (seq1 : seq2 : [INil])
-                              = iAppend seq1 (iAppend sep seq2)
-iInterleave sep (seq1 : seq2 : seqLs)
-                              = iAppend seq1 (iAppend sep (iInterleave sep seqLs))
+iInterleave sep [INil]        = INil
+iInterleave sep ([seq1])      = iAppend seq1 INil
+iInterleave sep (seq1 : seqLs)
+                              = iAppend sep (iAppend seq1 (iInterleave sep seqLs))
 iNewline                      = IStr "\n"
-iIndent seq                   = seq
-iDisplay prog                 = prog
+iIndent seq                   = IIndent seq
 
 pprExpr :: CoreExpr -> Iseq
 pprExpr (EVar v)                = iStr v
