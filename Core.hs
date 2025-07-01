@@ -107,8 +107,9 @@ iInterleave sep (seq1 : seqLs)
 iNewline                      = IStr "\n"
 iIndent seq                   = IIndent seq
 
+-- convert core expressions to use Iseq types --
 pprExpr :: CoreExpr -> Iseq
-pprExpr (EVar v)                = iStr v
+pprExpr (EVar v)                = iAppend (iStr " = ") (iStr v)
 pprExpr (EApp e1 e2)            = (pprExpr e1) `iAppend` (iStr " ") `iAppend` (pprExpr e2)
 pprExpr (ELet isrec defns expr) = iConcat [iStr keyword , iNewline,
                                            iStr " ", iIndent (pprDefns defns), iNewline,
@@ -152,10 +153,11 @@ pprProgram :: CoreProgram -> Iseq
 pprProgram scDefLs = iConcat (List.concatMap showScDef scDefLs)
                         where
                           showScDef (name, nameLs, nameExpr) =
-                             [iStr name, iInterleave (IStr ", ") (map iStr nameLs),
-                                        pprExpr nameExpr, iNewline]
+                             [iStr (name ++ space 2),
+                             iInterleave (IStr " ") (map (\x -> iStr (x ++ space 1)) nameLs),
+                             pprExpr nameExpr, iNewline]
 
-pprint :: CoreProgram -> Iseq
+pprint :: CoreProgram -> String
 pprint prog = iDisplay (pprProgram prog)
 
 -------------------------------------------------------------------------------
