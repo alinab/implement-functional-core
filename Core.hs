@@ -66,25 +66,8 @@ preludeDefs = [("I", ["x"], EVar "x"),
                ("twice", ["f"], EApp (EApp (EVar "compose") (EVar "f")) (EVar "f"))]
 
 
--- printing expressions --
-{-
-pprExpr :: CoreExpr -> String
-pprExpr (ENum n) = show n
-pprExpr (EVar v) = v
-pprExpr (EApp e1 e2) = pprExpr e1 ++ " " ++ pprExpr e2
-
-
-pprAExpr :: CoreExpr -> String
-pprAExpr e | isAtomicExpr e = pprExpr e
-pprAExpr e | otherwise  = "(" ++ pprExpr e ++ ")"
-
-mkMultiAp :: Int -> CoreExpr -> CoreExpr -> CoreExpr
-mkMultiAp n e1 e2 = List.foldl EApp e1 (List.take n e2s)
-                    where
-                      e2s = e2 : e2s
--}
-
--- printing with abstract type iseq --
+-------------------------------------------------------------------------------
+-- printing with abstract type Iseq --
 data Iseq = INil
           | IStr String
           | INum Int
