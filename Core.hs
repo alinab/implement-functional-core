@@ -79,7 +79,7 @@ data Iseq = INil
 iNil                          = INil
 iAppend seq1 seq2             = IAppend seq1 seq2
 iStr str                      = IStr str
-iNum n                        = INum n
+iNum n                        = IStr (show n)
 iConcat [INil]                = INil
 iConcat [seq1]                = iAppend seq1 INil
 iConcat (seq1 : seq2 : seqLs) = iAppend seq1 (iConcat (seq2 : seqLs))
@@ -186,3 +186,16 @@ pprExprWithDisplay (ECase exp1 alterLs)  = iDisplay $ iConcat [ iStr "case ",
 pprExprWithDisplay (ELam varLs expr) = iDisplay $ iConcat [ iStr "\\",
                                         iInterleave (IStr ", ") (map iStr varLs),
                                                 iNewline, iIndent (pprExpr expr)]
+
+-- ensure that all numbers are aligned the same --
+iFWNum :: Int ->  Int -> Iseq
+iFWNum width n = iStr (space (width - length digits) ++ digits)
+                    where
+                      digits = show n
+
+-- number each item in a list with a newline char. after each item --
+iLayn :: [Iseq] -> Iseq
+iLayn seqs = iConcat (map lay_item (List.zip [1..] seqs) )
+                where
+                   lay_item (n, seq)
+                    = iConcat [ iFWNum 4 n, iStr ") ", iIndent seq, iNewline ]
