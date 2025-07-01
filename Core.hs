@@ -1,7 +1,7 @@
 module CoreLanguage where
 
+import           Data.List as List
 import qualified Data.Text as T
-import Data.List as List
 
 
 data Expr e = EVar Name               -- Variables
@@ -46,11 +46,11 @@ isAtomicExpr e        = False
 
 -- a supercombinator defintion consists of a name, its arguments
 -- and the body of the definition
-type ScDefn a = (Name, [a], Expr a)
-type CoreScDefn = ScDefn Name
+type ScDefn a    = (Name, [a], Expr a)
+type CoreScDefn  = ScDefn Name
 
 -- a program is a list of supercombinator definitions
-type Program p = [ScDefn p]
+type Program p   = [ScDefn p]
 type CoreProgram = Program Name
 
 -- a minimal prelude for core language including the I, K , K1
@@ -125,7 +125,7 @@ pprDefn (name, expr) = iConcat [iStr name, iStr " = ", iIndent (pprExpr expr)]
 
 pprAExpr :: CoreExpr -> Iseq
 pprAExpr e | isAtomicExpr e = pprExpr e
-pprAExpr e | otherwise  = iConcat [IStr "(", pprExpr e, IStr ")"]
+pprAExpr e | otherwise      = iConcat [IStr "(", pprExpr e, IStr ")"]
 
 mkMultiAp :: Int -> CoreExpr -> CoreExpr -> CoreExpr
 mkMultiAp n e1 e2 = List.foldl EApp e1 (List.take n e2s)
@@ -148,15 +148,15 @@ pprint prog = iDisplay (pprProgram prog)
     for it is linear to the input iseq -}
 
 flatten :: Int -> [(Iseq, Int)] -> String
-flatten col [] = ""
-flatten col ((INil, indent) : seqs) = flatten col seqs
-flatten col ((IStr s, indent) : seqs)  = s ++ flatten col seqs
-flatten col ((INum i, indent) : seqs)  = show i ++ flatten col seqs
+flatten col []                                   = ""
+flatten col ((INil, indent) : seqs)              = flatten col seqs
+flatten col ((IStr s, indent) : seqs)            = s ++ flatten col seqs
+flatten col ((INum i, indent) : seqs)            = show i ++ flatten col seqs
 flatten col ((IAppend seq1 seq2, indent) : seqs) = flatten col ((seq1, indent) :
                                                                 (seq2, indent) :
                                                                 seqs)
-flatten col ((INewline, indent) : seqs) = '\n' : (space indent) ++ flatten indent seqs
-flatten col ((IIndent seq, indent) : seqs) = flatten col ((seq, col) : seqs)
+flatten col ((INewline, indent) : seqs)          = '\n' : (space indent) ++ flatten indent seqs
+flatten col ((IIndent seq, indent) : seqs)       = flatten col ((seq, col) : seqs)
 
 space :: Int -> String
 space i = List.replicate i ' '
@@ -183,7 +183,6 @@ pprExprWithDisplay (ECase exp1 alterLs)  = iDisplay $ iConcat [ iStr "case ",
                                                     iInterleave (IStr ", ") (map iStr boundVars),
                                                     iStr "=>", pprExpr expr, iNewline]
 
-pprExprWithDisplay (ELam varLs expr) = iDisplay $
-                                        iConcat [ iStr "\\",
+pprExprWithDisplay (ELam varLs expr) = iDisplay $ iConcat [ iStr "\\",
                                         iInterleave (IStr ", ") (map iStr varLs),
                                                 iNewline, iIndent (pprExpr expr)]
