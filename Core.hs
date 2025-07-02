@@ -92,6 +92,14 @@ iIndent seq                   = IIndent seq
 pprExpr :: CoreExpr -> Iseq
 pprExpr (EVar v)                = (iStr v)
 pprExpr (ENum n)                = INum n
+pprExpr (EApp (EApp (EVar "+") e1) e2)
+                                = iConcat [ pprAExpr e1, iStr " + ", pprAExpr e2 ]
+pprExpr (EApp (EApp (EVar "-") e1) e2)
+                                = iConcat [ pprAExpr e1, iStr " - ", pprAExpr e2 ]
+pprExpr (EApp (EApp (EVar "*") e1) e2)
+                                = iConcat [ pprAExpr e1, iStr " * ", pprAExpr e2 ]
+pprExpr (EApp (EApp (EVar "/") e1) e2)
+                                = iConcat [ pprAExpr e1, iStr " / ", pprAExpr e2 ]
 pprExpr (EApp e1 e2)            = (pprExpr e1) `iAppend` (iStr " ") `iAppend` (pprExpr e2)
 pprExpr (ELet isrec defns expr) = iConcat [iStr keyword , iNewline,
                                            iStr " ", iIndent (pprDefns defns), iNewline,
