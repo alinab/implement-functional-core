@@ -92,7 +92,8 @@ iIndent seq                   = IIndent seq
 
 -- convert core expressions to use Iseq types --
 pprExpr :: CoreExpr -> Iseq
-pprExpr (EVar v)                = iAppend (iStr " = ") (iStr v)
+pprExpr (EVar v)                = (iStr v)
+pprExpr (ENum n)                = INum n
 pprExpr (EApp e1 e2)            = (pprExpr e1) `iAppend` (iStr " ") `iAppend` (pprExpr e2)
 pprExpr (ELet isrec defns expr) = iConcat [iStr keyword , iNewline,
                                            iStr " ", iIndent (pprDefns defns), iNewline,
