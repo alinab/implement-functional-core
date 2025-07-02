@@ -1,8 +1,6 @@
 module CoreLanguage where
 
 import           Data.List as List
-import qualified Data.Text as T
-
 
 data Expr e = EVar Name               -- Variables
             | ENum Int                -- Numbers
