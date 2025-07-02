@@ -1,4 +1,4 @@
-module CoreLanguage where
+module Language where
 
 import           Data.List as List
 
