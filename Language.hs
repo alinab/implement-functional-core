@@ -38,8 +38,8 @@ type CoreAlt = Alter Name
 
 -- Expressions with no internal structure are atomic --
 isAtomicExpr :: Expr a -> Bool
-isAtomicExpr (EVar v) = True
-isAtomicExpr (ENum n) = True
+isAtomicExpr (EVar _) = True
+isAtomicExpr (ENum _) = True
 isAtomicExpr e        = False
 
 -- a supercombinator defintion consists of a name, its arguments
@@ -72,26 +72,40 @@ data Iseq = INil
           | IAppend Iseq Iseq
           | INewline
           | IIndent Iseq
-          | IDisplay Iseq
 
+iNil :: Iseq
 iNil                          = INil
+
+iAppend :: Iseq -> Iseq -> Iseq
 iAppend seq1 seq2             = IAppend seq1 seq2
+
+iStr :: String -> Iseq
 iStr str                      = IStr str
+
+iNum :: Int -> Iseq
 iNum n                        = IStr (show n)
-iConcat [INil]                = INil
+
+iNewline :: Iseq
+iNewline                      = IStr "\n"
+
+iIndent :: Iseq -> Iseq
+iIndent iseq                  = IIndent iseq
+
+iConcat :: [Iseq] -> Iseq
+iConcat []                    = INil
 iConcat [seq1]                = iAppend seq1 INil
 iConcat (seq1 : seq2 : seqLs) = iAppend seq1 (iConcat (seq2 : seqLs))
-iInterleave sep [INil]        = INil
-iInterleave sep ([seq1])      = iAppend seq1 INil
+
+iInterleave :: Iseq -> [Iseq] -> Iseq
+iInterleave _ []              = INil
+iInterleave _ [seq1]          = iAppend seq1 INil
 iInterleave sep (seq1 : seqLs)
                               = iAppend sep (iAppend seq1 (iInterleave sep seqLs))
-iNewline                      = IStr "\n"
-iIndent seq                   = IIndent seq
 
 -- convert core expressions to use Iseq types --
 pprExpr :: CoreExpr -> Iseq
-pprExpr (EVar v)                = (iStr v)
-pprExpr (ENum n)                = INum n
+pprExpr (EVar v)                = iStr v
+pprExpr (ENum n)                = iNum n
 pprExpr (EApp (EApp (EVar "+") e1) e2)
                                 = iConcat [ pprAExpr e1, iStr " + ", pprAExpr e2 ]
 pprExpr (EApp (EApp (EVar "-") e1) e2)
@@ -100,7 +114,7 @@ pprExpr (EApp (EApp (EVar "*") e1) e2)
                                 = iConcat [ pprAExpr e1, iStr " * ", pprAExpr e2 ]
 pprExpr (EApp (EApp (EVar "/") e1) e2)
                                 = iConcat [ pprAExpr e1, iStr " / ", pprAExpr e2 ]
-pprExpr (EApp e1 e2)            = (pprExpr e1) `iAppend` (iStr " ") `iAppend` (pprExpr e2)
+pprExpr (EApp e1 e2)            = (pprExpr e1) `iAppend` (iStr " ") `iAppend` (pprAExpr e2)
 pprExpr (ELet isrec defns expr) = iConcat [iStr keyword , iNewline,
                                            iStr " ", iIndent (pprDefns defns), iNewline,
                                            iStr "in ", pprExpr expr]
@@ -135,7 +149,7 @@ pprAExpr e | isAtomicExpr e = pprExpr e
 pprAExpr e | otherwise      = iConcat [IStr "(", pprExpr e, IStr ")"]
 
 mkMultiAp :: Int -> CoreExpr -> CoreExpr -> CoreExpr
-mkMultiAp n e1 e2 = List.foldl EApp e1 (List.take n e2s)
+mkMultiAp n e1 e2 = List.foldr EApp e1 (List.take n e2s)
                     where
                       e2s = e2 : e2s
 
@@ -152,26 +166,30 @@ pprint prog = iDisplay (pprProgram prog)
 
 -------------------------------------------------------------------------------
 {- Flattening Iseqs into displayable strings while ensuring that the time taken
-    for it is linear to the input iseq -}
+    for it is linear to the input -}
 
-flatten :: Int -> [(Iseq, Int)] -> String
-flatten col []                                   = ""
-flatten col ((INil, indent) : seqs)              = flatten col seqs
-flatten col ((IStr s, indent) : seqs)            = s ++ flatten col seqs
-flatten col ((INum i, indent) : seqs)            = show i ++ flatten col seqs
+flatten :: Int                 -- tracks the current column with 0 as the first
+        -> [(Iseq, Int)]       -- list of iseq's to flatten
+        -> String              -- output
+flatten _  []                                    = ""
+flatten col ((INil, _) : seqs)                   = flatten col seqs
+flatten col ((IStr s, _) : seqs)                 = s ++ flatten col seqs
+flatten col ((INum i, _) : seqs)                 = show i ++ flatten col seqs
 flatten col ((IAppend seq1 seq2, indent) : seqs) = flatten col ((seq1, indent) :
                                                                 (seq2, indent) :
                                                                 seqs)
-flatten col ((INewline, indent) : seqs)          = '\n' : (space indent) ++ flatten indent seqs
-flatten col ((IIndent seq, indent) : seqs)       = flatten col ((seq, col) : seqs)
+flatten _   ((INewline, indent) : seqs)          = '\n' : space indent ++ flatten indent seqs
+flatten col ((IIndent seq1, _) : seqs)           = flatten col ((seq1, col) : seqs)
 
 space :: Int -> String
 space i = List.replicate i ' '
 
-iDisplay seq = flatten 0 [(seq, 0)]
+iDisplay :: Iseq -> String
+iDisplay iseq = flatten 0 [(iseq, 0)]
 
 pprExprWithDisplay :: CoreExpr -> String
 pprExprWithDisplay (EVar v)       = iDisplay (iStr v)
+pprExprWithDisplay (ENum n)       = iDisplay (iNum n)
 pprExprWithDisplay (EApp e1 e2)   = iDisplay $ (pprExpr e1) `iAppend` (iStr " ")
                                                                 `iAppend` (pprExpr e2)
 pprExprWithDisplay (ELet isrec defns expr) = iDisplay $ iConcat [iStr keyword,
@@ -196,13 +214,13 @@ pprExprWithDisplay (ELam varLs expr) = iDisplay $ iConcat [ iStr "\\",
 
 -- ensure that all numbers are aligned the same --
 iFWNum :: Int ->  Int -> Iseq
-iFWNum width n = iStr (space (width - length digits) ++ digits)
+iFWNum width n = iStr (space (width - List.length digits) ++ digits)
                     where
                       digits = show n
 
 -- number each item in a list with a newline char. after each item --
 iLayn :: [Iseq] -> Iseq
-iLayn seqs = iConcat (map lay_item (List.zip [1..] seqs) )
+iLayn seqs = iConcat (List.zipWith (curry lay_item) [1 .. ] seqs)
                 where
-                   lay_item (n, seq)
-                    = iConcat [ iFWNum 4 n, iStr ") ", iIndent seq, iNewline ]
+                   lay_item (n, s)
+                    = iConcat [ iFWNum 4 n, iStr ") ", iIndent s, iNewline ]
