@@ -2,6 +2,8 @@ module Parser where
 
 import Lex
 import Data.Foldable as DFold
+import Data.Maybe as Maybe
+import Text.Read as Read
 
 -- The type Token is a list of (Int, [Char]) --
 type Parser a = [Token] -> [(a, [Token])]
@@ -16,8 +18,8 @@ matchToken :: String -> Token -> Bool
 matchToken s token = let (_ , tokStr) = token
                      in s == tokStr
 
-pVar :: Parser String
-pVar [] = []
+pVar' :: Parser String
+pVar' [] = []
 
 pAlt :: Parser a -> Parser a -> Parser a
 pAlt p1 p2 toks = p1 toks ++ p2 toks
@@ -32,7 +34,7 @@ pHelloOrGoodbye = (pLit "hello") `pAlt` (pLit "goodbye")
 
 
 pGreeting :: Parser (String, String)
-pGreeting = pThen mk_pair pHelloOrGoodbye pVar
+pGreeting = pThen mk_pair pHelloOrGoodbye pVar'
              where
                mk_pair hg name = (hg, name)
 
@@ -80,3 +82,39 @@ pApply :: Num b => Parser a -> (a -> b) -> Parser b
 pApply p f toks
   | tk <- p toks = let y = map (f . fst) tk
                    in [(DFold.sum y, [])]
+
+pOneOrMoreWithSep :: Parser a -> Parser b -> Parser [a]
+pOneOrMoreWithSep p1 p2 toks
+  | tk@[(v, tok')] <- p1 toks = if null tk
+                                then pOneOrMore p1 tok'
+                                else ([v], (processSep tok')) : pOneOrMore p1
+                                                                 (processSep tok')
+                                      where
+                                        processSep tok'
+                                          | [(_, tok'')] <- p2 tok' = tok''
+
+pOneOrMoreWithSep  _ _ (_:_)  = []
+pOneOrMoreWithSep  _ _ []     = []
+
+pSat :: (String -> Bool) -> Parser String
+pSat sTest ((_, s) : toks) | sTest s   = [(s, toks)]
+                           | otherwise = []
+pSat _          []                     = []
+
+pLit' :: String -> Parser String
+pLit' s = pSat (== s)
+
+pVar'' :: String -> Parser String
+pVar'' v = pSat (== v)
+
+keywords :: [String]
+keywords = ["let", "letrec", "case", "in", "of", "Pack"]
+
+isKWord :: String -> Bool
+isKWord w = w `elem` keywords
+
+pVar :: String -> Parser String
+pVar v = pSat (\x -> x == v && (not . isKWord) v)
+
+pNum :: String -> Parser Int
+pNum n = pSat (== n) `pApply` (\x -> Maybe.fromMaybe 0 (Read.readMaybe x :: Maybe Int))
