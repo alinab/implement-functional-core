@@ -125,3 +125,26 @@ pNum = pSat (all Char.isDigit)
         `pApply`
            (\x -> Maybe.fromMaybe 0 (Read.readMaybe x :: Maybe Int))
 
+{-----------------------------------------------------------------------------}
+{-- Parser for Core --}
+
+syntax :: [Token] -> CoreProgram
+syntax = take_first_parse . pProgram
+            where
+            take_first_parse ((prog, []) : _)      = prog
+            take_first_parse ((prog, _ ) : others) = prog ++ take_first_parse others
+            take_first_parse  _                    = error "Parse error: Wrong syntax"
+
+pProgram :: Parser CoreProgram
+pProgram = pOneOrMoreWithSep pSc (pLit ";")
+
+pSc :: Parser CoreScDefn
+pSc = pThen4 mkSc pVar (pZeroOrMore pVar) (pLit "=") pExpr
+
+mkSc :: Name -> [Name] -> Name -> CoreExpr -> CoreScDefn
+mkSc v1 v2 _ v4 = (v1, v2, v4)
+
+pExpr :: Parser CoreExpr
+pExpr toks
+  | [(n, toks')] <- pNum toks = [(ENum n, toks')]
+  | [(v, toks')] <- pVar toks = [(EVar (show v), toks')]
