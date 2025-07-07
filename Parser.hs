@@ -1,11 +1,12 @@
 module Parser where
 
 import Lex
-import Data.Foldable as DFold
 import Data.Maybe as Maybe
 import Text.Read as Read
+import Data.Char as Char
 
--- The type Token is a list of (Int, [Char]) --
+import Language as Lang (rhssOf)
+
 type Parser a = [Token] -> [(a, [Token])]
 
 {--- Parsers ---}
@@ -34,15 +35,15 @@ pHelloOrGoodbye = (pLit "hello") `pAlt` (pLit "goodbye")
 
 
 pGreeting :: Parser (String, String)
-pGreeting = pThen mk_pair pHelloOrGoodbye pVar'
+pGreeting = pThen mkPair pHelloOrGoodbye pVar'
              where
-               mk_pair hg name = (hg, name)
+               mkPair hg name = (hg, name)
 
 pThen3 :: (a -> b -> c -> d) -> Parser a -> Parser b -> Parser c -> Parser d
 pThen3 combine3 p1 p2 p3 toks = [ (combine3 v1 v2 v3, toks3)
-                                                    | (v1, toks1) <- p1 toks,
-                                                      (v2, toks2) <- p2 toks1,
-                                                      (v3, toks3) <- p3 toks2 ]
+                                               | (v1, toks1) <- p1 toks,
+                                                 (v2, toks2) <- p2 toks1,
+                                                 (v3, toks3) <- p3 toks2 ]
 
 pGreeting' :: Parser (String, String)
 pGreeting' = pThen3 mk_greeting pHelloOrGoodbye (pLit "James") (pLit "!")
@@ -78,20 +79,19 @@ pGreetings = pZeroOrMore pGreeting'
 pGreetingsN :: Parser Int
 pGreetingsN = (pZeroOrMore pGreeting') `pApply` length
 
-pApply :: Num b => Parser a -> (a -> b) -> Parser b
-pApply p f toks
-  | tk <- p toks = let y = map (f . fst) tk
-                   in [(DFold.sum y, [])]
+pApply :: Parser a -> (a -> b) -> Parser b
+pApply p f tok
+    | [(m, tok')] <- p tok = [(f m, tok')]
+    | otherwise            = []
 
 pOneOrMoreWithSep :: Parser a -> Parser b -> Parser [a]
 pOneOrMoreWithSep p1 p2 toks
   | tk@[(v, tok')] <- p1 toks = if null tk
-                                then pOneOrMore p1 tok'
-                                else ([v], (processSep tok')) : pOneOrMore p1
-                                                                 (processSep tok')
-                                      where
-                                        processSep tok'
-                                          | [(_, tok'')] <- p2 tok' = tok''
+                                then pOneOrMore p1 toks
+                                else ([v], rest tok') : pOneOrMoreWithSep
+                                                            p1 p2 (rest tok')
+                                where
+                                  rest tok' = concat $ rhssOf (p2 tok')
 
 pOneOrMoreWithSep  _ _ (_:_)  = []
 pOneOrMoreWithSep  _ _ []     = []
@@ -113,8 +113,11 @@ keywords = ["let", "letrec", "case", "in", "of", "Pack"]
 isKWord :: String -> Bool
 isKWord w = w `elem` keywords
 
-pVar :: String -> Parser String
-pVar v = pSat (\x -> x == v && (not . isKWord) v)
+pVar :: Parser String
+pVar = pSat (\x -> (not . isKWord) x && all Char.isAlpha x)
 
-pNum :: String -> Parser Int
-pNum n = pSat (== n) `pApply` (\x -> Maybe.fromMaybe 0 (Read.readMaybe x :: Maybe Int))
+pNum :: Parser Int
+pNum = pSat (all Char.isDigit)
+        `pApply`
+           (\x -> Maybe.fromMaybe 0 (Read.readMaybe x :: Maybe Int))
+
