@@ -1,3 +1,5 @@
+{-# LANGUAGE ExplicitNamespaces #-}
+
 module Parser where
 
 import Lex
@@ -5,7 +7,9 @@ import Data.Maybe as Maybe
 import Text.Read as Read
 import Data.Char as Char
 
-import Language as Lang (rhssOf)
+import Language as Lang (type CoreProgram, type CoreScDefn,
+                         type CoreExpr, type Name,
+                         Expr(EVar), Expr(ENum), rhssOf)
 
 type Parser a = [Token] -> [(a, [Token])]
 
