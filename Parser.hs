@@ -7,9 +7,11 @@ import Data.Maybe as Maybe
 import Text.Read as Read
 import Data.Char as Char
 
-import Language as Lang (type CoreProgram, type CoreScDefn,
-                         type CoreExpr, type Name,
-                         Expr(EVar), Expr(ENum), rhssOf)
+import qualified Language as Lang (type CoreProgram, type CoreScDefn,
+                                   type CoreExpr, type Name, type CoreAlt,
+                                   Expr(EVar), Expr(ENum),
+                                   Expr(ELet), Expr (ECase),
+                                   rhssOf)
 
 type Parser a = [Token] -> [(a, [Token])]
 
@@ -95,7 +97,7 @@ pOneOrMoreWithSep p1 p2 toks
                                 else ([v], rest tok') : pOneOrMoreWithSep
                                                             p1 p2 (rest tok')
                                 where
-                                  rest tok' = concat $ rhssOf (p2 tok')
+                                  rest tok' = concat $ Lang.rhssOf (p2 tok')
 
 pOneOrMoreWithSep  _ _ (_:_)  = []
 pOneOrMoreWithSep  _ _ []     = []
@@ -128,23 +130,24 @@ pNum = pSat (all Char.isDigit)
 {-----------------------------------------------------------------------------}
 {-- Parser for Core --}
 
-syntax :: [Token] -> CoreProgram
+syntax :: [Token] -> Lang.CoreProgram
 syntax = take_first_parse . pProgram
             where
             take_first_parse ((prog, []) : _)      = prog
             take_first_parse ((prog, _ ) : others) = prog ++ take_first_parse others
             take_first_parse  _                    = error "Parse error: Wrong syntax"
 
-pProgram :: Parser CoreProgram
+pProgram :: Parser Lang.CoreProgram
 pProgram = pOneOrMoreWithSep pSc (pLit ";")
 
-pSc :: Parser CoreScDefn
+pSc :: Parser Lang.CoreScDefn
 pSc = pThen4 mkSc pVar (pZeroOrMore pVar) (pLit "=") pExpr
 
-mkSc :: Name -> [Name] -> Name -> CoreExpr -> CoreScDefn
+mkSc :: Lang.Name -> [Lang.Name] -> Lang.Name
+                  -> Lang.CoreExpr -> Lang.CoreScDefn
 mkSc v1 v2 _ v4 = (v1, v2, v4)
 
 pExpr :: Parser CoreExpr
 pExpr toks
-  | [(n, toks')] <- pNum toks = [(ENum n, toks')]
-  | [(v, toks')] <- pVar toks = [(EVar (show v), toks')]
+  | [(n, toks')] <- pNum toks               = [(Lang.ENum n, toks')]
+  | [(v, toks')] <- pVar toks               = [(Lang.EVar (show v), toks')]
