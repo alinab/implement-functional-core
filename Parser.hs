@@ -119,14 +119,6 @@ keywords = ["let", "letrec", "case", "in", "of", "Pack"]
 isKWord :: String -> Bool
 isKWord w = w `elem` keywords
 
-pVar :: Parser String
-pVar = pSat (\x -> (not . isKWord) x && all Char.isAlpha x)
-
-pNum :: Parser Int
-pNum = pSat (all Char.isDigit)
-        `pApply`
-           (\x -> Maybe.fromMaybe 0 (Read.readMaybe x :: Maybe Int))
-
 {-----------------------------------------------------------------------------}
 {-- Parser for Core --}
 
@@ -147,7 +139,58 @@ mkSc :: Lang.Name -> [Lang.Name] -> Lang.Name
                   -> Lang.CoreExpr -> Lang.CoreScDefn
 mkSc v1 v2 _ v4 = (v1, v2, v4)
 
-pExpr :: Parser CoreExpr
+pVar :: Parser String
+pVar = pSat (\x -> (not . isKWord) x && all Char.isAlpha x)
+
+pNum :: Parser Int
+pNum = pSat (all Char.isDigit)
+        `pApply`
+           (\x -> Maybe.fromMaybe 0 (Read.readMaybe x :: Maybe Int))
+
+pLet :: Parser ((Lang.Name, Lang.CoreExpr), Lang.CoreExpr)
+pLet = pThen4 mkPLet (pLit "let") pScLet (pLit "in") pExpr
+
+mkPLet :: Lang.Name -> (Lang.Name, Lang.CoreExpr)
+                    -> Lang.Name
+                    -> Lang.CoreExpr
+                    -> ((Lang.Name, Lang.CoreExpr), Lang.CoreExpr)
+mkPLet _ v2 _ v4 = (v2, v4)
+
+pScLet :: Parser (Lang.Name, Lang.CoreExpr)
+pScLet = pThen3 mkLetDefn pVar (pLit "=") pExpr
+
+mkLetDefn :: Lang.Name -> Lang.Name -> Lang.CoreExpr
+                        -> (Lang.Name, Lang.CoreExpr)
+mkLetDefn v1 _ v3 = (v1, v3)
+
+pCase :: Parser (Lang.CoreExpr, [Lang.CoreAlt])
+pCase = pThen4 mkpCase (pLit "case")
+                       (pThen3 pCaseExpr (pAlt (pLit "(") (pLit ""))
+                                pExpr (pAlt (pLit ")") (pLit "")))
+                       (pLit "of") pCaseAlt
+
+pCaseExpr :: String -> Lang.CoreExpr -> String -> Lang.CoreExpr
+pCaseExpr _ v2 _ = v2
+
+mkpCase :: String -> Lang.CoreExpr -> String
+                  -> [Lang.CoreAlt] -> (Lang.CoreExpr, [Lang.CoreAlt])
+mkpCase _ v2 _ v4 = (v2, v4)
+
+pCaseAlt :: Parser [Lang.CoreAlt]
+pCaseAlt = pOneOrMore (pThen3 pCaseAltExpr
+                      (pThen4 pCaseNum (pLit "<") pNum (pLit ">") (pLit "->"))
+                              pExpr (pAlt (pLit ";") (pLit "")))
+
+pCaseNum :: String -> Int -> String -> String -> Int
+pCaseNum _ v2 _ _ = v2
+
+pCaseAltExpr :: Int -> Lang.CoreExpr -> String -> Lang.CoreAlt
+pCaseAltExpr v1 v2 _ = (v1, [], v2)
+
+
+pExpr :: Parser Lang.CoreExpr
 pExpr toks
   | [(n, toks')] <- pNum toks               = [(Lang.ENum n, toks')]
   | [(v, toks')] <- pVar toks               = [(Lang.EVar (show v), toks')]
+  | [((defns, expr), toks')] <- pLet toks   = [(Lang.ELet False [defns] expr, toks')]
+  | [((expr, alters), toks')] <- pCase toks = [(Lang.ECase expr alters, toks')]
