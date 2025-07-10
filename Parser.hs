@@ -72,12 +72,12 @@ pZeroOrMore :: Parser a -> Parser [a]
 pZeroOrMore p = (pOneOrMore p) `pAlt` (pEmpty [])
 
 pOneOrMore :: Parser a  -> Parser [a]
-pOneOrMore p toks
-  | tk@[(v, tok')] <- p toks = if null tk
-                               then pOneOrMore p tok'
-                               else ([v], tok') : pOneOrMore p tok'
-pOneOrMore _ (_:_)           = []
-pOneOrMore _ []              = []
+pOneOrMore p toks  = oneOrMore p toks []
+    where
+        oneOrMore p' toks' tokls
+             | null toks'            = []
+             | [(v, t')] <- p' toks' = oneOrMore p' t' (v : tokls)
+             |         otherwise     = [(tokls, toks')]
 
 pGreetings :: Parser [(String, String)]
 pGreetings = pZeroOrMore pGreeting'
